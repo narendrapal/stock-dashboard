@@ -1,12 +1,11 @@
 """
-Technical indicator calculations using pandas-ta.
-"""
+Technical indicator calculations using the 'ta' library (pure Python)."""
 
 import logging
 from typing import Optional
 
 import pandas as pd
-import pandas_ta as ta
+import ta as ta_lib
 
 logger = logging.getLogger(__name__)
 
@@ -16,9 +15,7 @@ def compute_rsi(df: pd.DataFrame, period: int = 14) -> Optional[float]:
     try:
         if df is None or len(df) < period + 1:
             return None
-        rsi_series = ta.rsi(df["Close"], length=period)
-        if rsi_series is None or rsi_series.empty:
-            return None
+        rsi_series = ta_lib.momentum.RSIIndicator(df["Close"], window=period).rsi()
         val = rsi_series.dropna().iloc[-1]
         return round(float(val), 2)
     except Exception as e:
@@ -31,15 +28,11 @@ def compute_macd(df: pd.DataFrame) -> dict:
     try:
         if df is None or len(df) < 35:
             return {}
-        macd_df = ta.macd(df["Close"])
-        if macd_df is None or macd_df.empty:
-            return {}
-        last = macd_df.dropna().iloc[-1]
-        cols = macd_df.columns.tolist()
+        macd_obj = ta_lib.trend.MACD(df["Close"])
         return {
-            "macd": round(float(last[cols[0]]), 4),
-            "histogram": round(float(last[cols[1]]), 4),
-            "signal": round(float(last[cols[2]]), 4),
+            "macd":      round(float(macd_obj.macd().dropna().iloc[-1]), 4),
+            "signal":    round(float(macd_obj.macd_signal().dropna().iloc[-1]), 4),
+            "histogram": round(float(macd_obj.macd_diff().dropna().iloc[-1]), 4),
         }
     except Exception as e:
         logger.error(f"MACD error: {e}")
@@ -50,9 +43,7 @@ def compute_sma(df: pd.DataFrame, period: int) -> Optional[float]:
     try:
         if df is None or len(df) < period:
             return None
-        sma = ta.sma(df["Close"], length=period)
-        if sma is None or sma.empty:
-            return None
+        sma = ta_lib.trend.SMAIndicator(df["Close"], window=period).sma_indicator()
         return round(float(sma.dropna().iloc[-1]), 2)
     except Exception as e:
         logger.error(f"SMA({period}) error: {e}")
@@ -63,9 +54,7 @@ def compute_ema(df: pd.DataFrame, period: int) -> Optional[float]:
     try:
         if df is None or len(df) < period:
             return None
-        ema = ta.ema(df["Close"], length=period)
-        if ema is None or ema.empty:
-            return None
+        ema = ta_lib.trend.EMAIndicator(df["Close"], window=period).ema_indicator()
         return round(float(ema.dropna().iloc[-1]), 2)
     except Exception as e:
         logger.error(f"EMA({period}) error: {e}")
@@ -91,9 +80,9 @@ def compute_atr(df: pd.DataFrame, period: int = 14) -> Optional[float]:
     try:
         if df is None or len(df) < period + 1:
             return None
-        atr = ta.atr(df["High"], df["Low"], df["Close"], length=period)
-        if atr is None or atr.empty:
-            return None
+        atr = ta_lib.volatility.AverageTrueRange(
+            df["High"], df["Low"], df["Close"], window=period
+        ).average_true_range()
         return round(float(atr.dropna().iloc[-1]), 2)
     except Exception as e:
         logger.error(f"ATR error: {e}")
