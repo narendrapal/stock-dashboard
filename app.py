@@ -55,67 +55,64 @@ st.set_page_config(
 # ══════════════════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
-/* ── Global ── */
-[data-testid="stAppViewContainer"] { background: #0e1117; }
-[data-testid="stSidebar"] { background: #161b27 !important; border-right: 1px solid #2d3748; }
-[data-testid="stSidebar"] * { color: #e2e8f0 !important; }
-
 /* ── Metric Cards ── */
 .metric-card {
-    background: linear-gradient(135deg, #1a2234 0%, #1e2d40 100%);
-    border: 1px solid #2d3748;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
     border-radius: 12px;
-    padding: 16px 20px;
+    padding: 14px 16px;
     text-align: center;
-    transition: transform .15s;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    transition: transform .15s, box-shadow .15s;
 }
-.metric-card:hover { transform: translateY(-2px); border-color: #4a9eff; }
-.metric-card .label { font-size: 12px; color: #94a3b8; font-weight: 500; letter-spacing: .5px; text-transform: uppercase; margin-bottom: 6px; }
-.metric-card .value { font-size: 28px; font-weight: 700; line-height: 1; }
-.metric-card .sub   { font-size: 11px; color: #64748b; margin-top: 4px; }
-.metric-green .value { color: #22c55e; }
-.metric-red   .value { color: #ef4444; }
-.metric-orange.value { color: #f97316; }
-.metric-blue  .value { color: #3b82f6; }
-.metric-purple.value { color: #a855f7; }
+.metric-card:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(0,0,0,0.12); }
+.metric-card .label { font-size: 10px; color: #64748b; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; margin-bottom: 6px; }
+.metric-card .value { font-size: 30px; font-weight: 800; line-height: 1; }
+.metric-card .sub   { font-size: 10px; color: #94a3b8; margin-top: 4px; }
+.metric-green .value { color: #16a34a; }
+.metric-red   .value { color: #dc2626; }
+.metric-orange .value { color: #ea580c; }
+.metric-blue  .value { color: #2563eb; }
+.metric-purple .value { color: #7c3aed; }
 
 /* ── Page Title ── */
-.page-title { font-size: 24px; font-weight: 700; color: #f1f5f9; margin: 0; }
+.page-title { font-size: 22px; font-weight: 700; color: #1e293b; margin: 0; }
 .page-sub   { font-size: 13px; color: #64748b; margin-top: 2px; }
 
-/* ── Filter Tabs ── */
-.filter-tab-active {
-    background: #1d4ed8 !important; color: white !important;
-    border-radius: 8px; padding: 4px 14px; font-size: 13px; font-weight: 600;
-}
-
-/* ── Table ── */
-[data-testid="stDataFrame"] { border-radius: 10px; overflow: hidden; }
-thead th { background: #1e293b !important; color: #94a3b8 !important; font-size: 12px !important; text-transform: uppercase; }
-
 /* ── Sidebar section headers ── */
-.sidebar-section { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;
-    letter-spacing: 1px; padding: 8px 0 4px; border-bottom: 1px solid #2d3748; margin-bottom: 8px; }
+.sidebar-section { font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase;
+    letter-spacing: 1px; padding: 8px 0 4px; border-bottom: 1px solid #e2e8f0; margin-bottom: 8px; }
 
 /* ── Badge ── */
 .badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; }
-.badge-green  { background:#14532d; color:#4ade80; }
-.badge-red    { background:#450a0a; color:#f87171; }
-.badge-orange { background:#431407; color:#fb923c; }
-.badge-blue   { background:#1e3a5f; color:#60a5fa; }
+.badge-green  { background:#dcfce7; color:#15803d; }
+.badge-red    { background:#fee2e2; color:#b91c1c; }
+.badge-orange { background:#ffedd5; color:#c2410c; }
+.badge-blue   { background:#dbeafe; color:#1d4ed8; }
 
-/* ── Refresh banner ── */
+/* ── Cache / info banner ── */
 .cache-banner {
-    background: #1e293b; border: 1px solid #334155; border-radius: 8px;
-    padding: 8px 14px; font-size: 12px; color: #94a3b8; margin-bottom: 12px;
+    background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;
+    padding: 8px 14px; font-size: 12px; color: #0369a1; margin-bottom: 4px;
 }
+.warn-banner {
+    background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px;
+    padding: 8px 14px; font-size: 12px; color: #92400e; margin-bottom: 4px;
+}
+
+/* ── Refresh timestamp ── */
+.refresh-ts { font-size: 11px; color: #64748b; text-align: right; margin-top: 2px; }
 </style>
 """, unsafe_allow_html=True)
 
 # ── Session state ─────────────────────────────────────────────────────────────
+from datetime import timezone, timedelta
+IST = timezone(timedelta(hours=5, minutes=30))
+
 for _k, _v in [("last_refresh", None), ("df_screen", None), ("saved_at", None),
                ("rules", [dict(r) for r in NOTIFICATION_RULES]),
                ("current_watchlist", DEFAULT_WATCHLIST),
+               ("refresh_requested", False),
                ("custom_wl", None), ("timeframe", "Daily")]:
     if _k not in st.session_state:
         st.session_state[_k] = _v
@@ -187,10 +184,7 @@ with st.sidebar:
     pc_min     = st.number_input("Min Change%", value=-100.0, step=1.0, format="%.1f")
     pc_max     = st.number_input("Max Change%", value=100.0,  step=1.0, format="%.1f")
 
-    st.divider()
-    refresh_clicked = st.button("🔄 Refresh Live Data", use_container_width=True, type="primary")
-
-    # Show cache status
+    # Load cache on first visit (refresh button now lives in main area)
     cached_df, cached_at = load_screen_result(watchlist_name, timeframe)
     if st.session_state.df_screen is None and cached_df is not None:
         st.session_state.df_screen = cached_df
@@ -198,14 +192,14 @@ with st.sidebar:
 
     if st.session_state.saved_at:
         try:
-            saved_dt  = datetime.fromisoformat(st.session_state.saved_at)
-            mins_ago  = int((datetime.now() - saved_dt).total_seconds() / 60)
-            age_str   = f"{mins_ago}m ago" if mins_ago < 60 else f"{mins_ago//60}h ago"
+            saved_dt = datetime.fromisoformat(st.session_state.saved_at).astimezone(IST)
+            age_secs = (datetime.now(IST) - saved_dt).total_seconds()
+            age_str  = f"{int(age_secs//60)}m ago" if age_secs < 3600 else f"{int(age_secs//3600)}h ago"
+            st.caption(f"📦 Data: {saved_dt.strftime('%d %b %I:%M %p')} IST · {age_str}")
         except Exception:
-            age_str = "unknown"
-        st.markdown(f'<div class="cache-banner">📦 Showing saved data · {age_str}</div>', unsafe_allow_html=True)
+            st.caption("📦 Saved data loaded")
     else:
-        st.caption("No cached data — click Refresh")
+        st.caption("No cache — use Refresh button above")
 
     if not symbols:
         st.warning("⚠️ No symbols. Check NSE connection.")
@@ -213,6 +207,9 @@ with st.sidebar:
 # ══════════════════════════════════════════════════════════════════════════════
 # LIVE REFRESH HANDLER
 # ══════════════════════════════════════════════════════════════════════════════
+refresh_clicked = st.session_state.refresh_requested
+if refresh_clicked:
+    st.session_state.refresh_requested = False
 if refresh_clicked and symbols:
     clear_cache()
     # Pre-fetch all stock info (name, sector, 52W high) in bulk
@@ -252,29 +249,44 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(
 # TAB 1: SCREENER
 # ─────────────────────────────────────────────────────────────────────────────
 with tab1:
-    # ── Header row ──
-    hcol1, hcol2 = st.columns([6, 2])
+    # ── Header row with refresh button top-right ──
+    hcol1, hcol2 = st.columns([5, 1])
     with hcol1:
         st.markdown(f'<p class="page-title">{watchlist_name}</p>'
                     f'<p class="page-sub">{timeframe} timeframe · {len(symbols)} stocks</p>',
                     unsafe_allow_html=True)
+    with hcol2:
+        if st.button("🔄 Refresh", type="primary", use_container_width=True, key="main_refresh"):
+            st.session_state.refresh_requested = True
+            st.rerun()
+        if st.session_state.saved_at:
+            try:
+                _ts = datetime.fromisoformat(st.session_state.saved_at).astimezone(IST)
+                st.markdown(f'<div class="refresh-ts">{_ts.strftime("%d %b %H:%M")} IST</div>',
+                            unsafe_allow_html=True)
+            except Exception:
+                pass
 
     if st.session_state.df_screen is None:
-        st.info("👈 Click **Refresh Live Data** in the sidebar to load market data.")
+        st.info("Click **🔄 Refresh** (top right) to load market data.")
         if len(symbols) > 100:
             st.warning(f"⏱ {watchlist_name} has {len(symbols)} stocks. First load ≈ {len(symbols)//120 + 1}–{len(symbols)//80 + 1} min. Subsequent page loads use saved cache instantly.")
     else:
         df = st.session_state.df_screen.copy()
 
         # ── Compute stats ──
-        g   = int((df["Change%"] > 0).sum())  if "Change%" in df.columns else 0
-        lo  = int((df["Change%"] < 0).sum())  if "Change%" in df.columns else 0
-        ob  = int((df.get("RSI", pd.Series()) >= 70).sum()) if "RSI" in df.columns else 0
-        os_ = int((df.get("RSI", pd.Series()) <= 30).sum()) if "RSI" in df.columns else 0
-        ma_all = int(df.get("above_sma20", pd.Series(False)).astype(bool).sum() &
-                     df.get("above_sma50", pd.Series(False)).astype(bool).sum() &
-                     df.get("above_sma200", pd.Series(False)).astype(bool).sum()) if "above_sma20" in df.columns else 0
-        ath = int(df.get("Near 52W High", pd.Series(False)).astype(bool).sum()) if "Near 52W High" in df.columns else 0
+        g   = int((df["Change%"] > 0).sum()) if "Change%" in df.columns else 0
+        lo  = int((df["Change%"] < 0).sum()) if "Change%" in df.columns else 0
+        rsi_col = "RSI_D" if "RSI_D" in df.columns else ("RSI" if "RSI" in df.columns else None)
+        ob  = int((df[rsi_col] >= 70).sum()) if rsi_col else 0
+        os_ = int((df[rsi_col] <= 30).sum()) if rsi_col else 0
+        if all(c in df.columns for c in ["above_sma20","above_sma50","above_sma200"]):
+            ma_all = int((df["above_sma20"].astype(bool) &
+                          df["above_sma50"].astype(bool) &
+                          df["above_sma200"].astype(bool)).sum())
+        else:
+            ma_all = 0
+        ath = int(df["Near 52W High"].astype(bool).sum()) if "Near 52W High" in df.columns else 0
 
         # ── Stats cards ──
         c1, c2, c3, c4, c5, c6 = st.columns(6)
@@ -314,8 +326,8 @@ with tab1:
                 return "color:#22c55e;font-weight:700" if v > 0 else "color:#ef4444;font-weight:700"
             def _rsi(v):
                 if pd.isna(v): return ""
-                if v >= 70: return "background-color:#450a0a;color:#f87171;font-weight:700"
-                if v <= 30: return "background-color:#14532d;color:#4ade80;font-weight:700"
+                if v >= 70: return "background-color:#fee2e2;color:#b91c1c;font-weight:700"
+                if v <= 30: return "background-color:#dcfce7;color:#15803d;font-weight:700"
                 return ""
 
             fmt = {"Price": lambda x: f"{cur}{x:,.2f}" if pd.notna(x) else "—",
@@ -345,40 +357,49 @@ with tab1:
                          hide_index=True, height=520)
 
         with ft_rsi:
-            st.caption("Stocks with RSI > 70 on ALL three timeframes (Daily + Weekly + Monthly)")
-            df_rsi = df.copy()
-            for rc in ["RSI_D","RSI_W","RSI_M"]:
-                if rc in df_rsi.columns:
-                    df_rsi = df_rsi[df_rsi[rc].notna() & (df_rsi[rc] >= 70)]
-            st.caption(f"**{len(df_rsi)}** stocks")
-            if df_rsi.empty:
-                st.info("No stocks with RSI ≥ 70 across all three timeframes right now.")
+            st.caption("Stocks with RSI ≥ 70 on Daily + Weekly + Monthly simultaneously")
+            rsi_tf_cols = [rc for rc in ["RSI_D","RSI_W","RSI_M"] if rc in df.columns]
+            if not rsi_tf_cols:
+                st.markdown('<div class="warn-banner">⚠️ Multi-timeframe RSI not in cached data. Click <b>Refresh</b> to fetch live data.</div>', unsafe_allow_html=True)
             else:
-                st.dataframe(_style_df(df_rsi, currency), use_container_width=True,
-                             hide_index=True, height=400)
+                df_rsi = df.copy()
+                for rc in rsi_tf_cols:
+                    df_rsi = df_rsi[df_rsi[rc].notna() & (df_rsi[rc] >= 70)]
+                st.caption(f"**{len(df_rsi)}** stocks")
+                if df_rsi.empty:
+                    st.info("No stocks with RSI ≥ 70 across all three timeframes right now.")
+                else:
+                    st.dataframe(_style_df(df_rsi, currency), use_container_width=True,
+                                 hide_index=True, height=400)
 
         with ft_ma:
             st.caption("Stocks trading above SMA 20, SMA 50, and SMA 200 simultaneously")
-            df_ma = df.copy()
-            for col_flag in ["above_sma20","above_sma50","above_sma200"]:
-                if col_flag in df_ma.columns:
-                    df_ma = df_ma[df_ma[col_flag] == True]
-            st.caption(f"**{len(df_ma)}** stocks above all three MAs")
-            if df_ma.empty:
-                st.info("No stocks trading above all three moving averages right now.")
+            ma_flag_cols = [c for c in ["above_sma20","above_sma50","above_sma200"] if c in df.columns]
+            if not ma_flag_cols:
+                st.markdown('<div class="warn-banner">⚠️ MA data not in cached data. Click <b>Refresh</b> to fetch live data.</div>', unsafe_allow_html=True)
             else:
-                st.dataframe(_style_df(df_ma, currency), use_container_width=True,
-                             hide_index=True, height=400)
+                df_ma = df.copy()
+                for col_flag in ma_flag_cols:
+                    df_ma = df_ma[df_ma[col_flag].astype(bool)]
+                st.caption(f"**{len(df_ma)}** stocks above all three MAs")
+                if df_ma.empty:
+                    st.info("No stocks above all three MAs right now.")
+                else:
+                    st.dataframe(_style_df(df_ma, currency), use_container_width=True,
+                                 hide_index=True, height=400)
 
         with ft_52w:
             st.caption("Stocks within 3% of their 52-week high")
-            df_52 = df[df.get("Near 52W High", pd.Series(False)).astype(bool)] if "Near 52W High" in df.columns else df.iloc[0:0]
-            st.caption(f"**{len(df_52)}** stocks near 52-week high")
-            if df_52.empty:
-                st.info("No stocks near 52-week highs. Try refreshing to get latest data.")
+            if "Near 52W High" not in df.columns:
+                st.markdown('<div class="warn-banner">⚠️ 52W High data not in cached data. Click <b>Refresh</b> to fetch live data.</div>', unsafe_allow_html=True)
             else:
-                st.dataframe(_style_df(df_52, currency), use_container_width=True,
-                             hide_index=True, height=400)
+                df_52 = df[df["Near 52W High"].astype(bool)]
+                st.caption(f"**{len(df_52)}** stocks near 52-week high")
+                if df_52.empty:
+                    st.info("No stocks within 3% of 52-week high right now.")
+                else:
+                    st.dataframe(_style_df(df_52, currency), use_container_width=True,
+                                 hide_index=True, height=400)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TAB 2: CHART
@@ -414,16 +435,14 @@ with tab2:
                         x=df_chart.index, y=df_chart["Close"].rolling(period_n).mean(),
                         line=dict(color=color, width=1, dash=dash), name=f"SMA {period_n}"))
             fig.update_layout(
-                title=dict(text=chart_symbol, font=dict(size=16, color="#f1f5f9")),
-                xaxis_rangeslider_visible=False, height=520, template="plotly_dark",
-                paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
+                title=dict(text=chart_symbol, font=dict(size=16, color="#1e293b")),
+                xaxis_rangeslider_visible=False, height=520, template="plotly_white",
                 yaxis_title=f"Price ({currency})", margin=dict(l=0,r=0,t=40,b=0))
             st.plotly_chart(fig, use_container_width=True)
 
             fig_vol = go.Figure(go.Bar(x=df_chart.index, y=df_chart["Volume"],
-                                       marker_color="#3b82f6", opacity=0.7))
-            fig_vol.update_layout(height=160, template="plotly_dark",
-                                   paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
+                                       marker_color="#2563eb", opacity=0.7))
+            fig_vol.update_layout(height=160, template="plotly_white",
                                    showlegend=False, margin=dict(l=0,r=0,t=10,b=0))
             st.plotly_chart(fig_vol, use_container_width=True)
         else:
@@ -463,19 +482,25 @@ with tab3:
             wl_syms = custom_wl.get(selected_wl, [])
             st.caption(f"{len(wl_syms)} stocks")
 
-            # Add stock
+            # Add stock — searchable autocomplete from Nifty 500
             with st.form("add_sym_form"):
+                _all_syms = sorted(get_symbols("Nifty 500") + get_symbols("Nifty Next 50"))
+                _existing = set(wl_syms)
+                _choices  = [s for s in _all_syms if s not in _existing]
                 ac1, ac2 = st.columns([3,1])
                 with ac1:
-                    add_sym = st.text_input("Add symbol (e.g. RELIANCE.NS)", placeholder="SYMBOL.NS")
+                    add_sym = st.selectbox(
+                        "Search & add symbol (Nifty 500 + Next 50)",
+                        [""] + _choices,
+                        format_func=lambda x: x if x else "— type to search —",
+                        key="add_sym_select")
                 with ac2:
                     st.markdown("<br>", unsafe_allow_html=True)
                     add_submitted = st.form_submit_button("Add ➕")
                 if add_submitted and add_sym:
-                    sym_clean = add_sym.strip().upper()
-                    add_symbol_to_watchlist(selected_wl, sym_clean)
+                    add_symbol_to_watchlist(selected_wl, add_sym)
                     get_symbols.clear()
-                    st.success(f"Added {sym_clean}")
+                    st.success(f"Added {add_sym}")
                     st.rerun()
 
             # Show & remove
@@ -500,7 +525,7 @@ with tab4:
     wa_cfg = _get_wa_config()
 
     wa_status = "✅ Enabled" if wa_cfg.get("enabled") else "❌ Not configured"
-    st.markdown(f'<div class="cache-banner">WhatsApp status: {wa_status} · Phone: {wa_cfg.get("phone","—")}</div>',
+    st.markdown(f'<div class="cache-banner">WhatsApp: {wa_status} · Phone: {wa_cfg.get("phone","—")}</div>',
                 unsafe_allow_html=True)
 
     st.subheader("Rules")

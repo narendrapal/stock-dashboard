@@ -16,6 +16,12 @@ logger = logging.getLogger(__name__)
 CACHE_DIR = os.path.join(os.path.dirname(__file__), "cache")
 WATCHLIST_FILE = os.path.join(CACHE_DIR, "watchlists.json")
 
+# Bump this version whenever the screener schema adds/changes columns.
+# Old cached files missing required columns will be ignored.
+CACHE_SCHEMA_VERSION = 3
+REQUIRED_COLS = {"Name", "Sector", "RSI_D", "RSI_W", "RSI_M",
+                 "above_sma20", "above_sma50", "above_sma200", "Near 52W High"}
+
 
 def _screen_cache_path(watchlist_name: str, timeframe: str) -> str:
     safe = watchlist_name.replace(" ", "_").replace("/", "-")
@@ -29,6 +35,7 @@ def save_screen_result(watchlist_name: str, timeframe: str, df: pd.DataFrame):
     path = _screen_cache_path(watchlist_name, timeframe)
     try:
         payload = {
+            "schema_version": CACHE_SCHEMA_VERSION,
             "saved_at": datetime.now().isoformat(),
             "watchlist": watchlist_name,
             "timeframe": timeframe,
@@ -41,14 +48,24 @@ def save_screen_result(watchlist_name: str, timeframe: str, df: pd.DataFrame):
 
 
 def load_screen_result(watchlist_name: str, timeframe: str) -> tuple[pd.DataFrame | None, str | None]:
-    """Returns (DataFrame, saved_at_str) or (None, None) if no cache."""
+    """Returns (DataFrame, saved_at_str) or (None, None) if no cache or schema mismatch."""
     path = _screen_cache_path(watchlist_name, timeframe)
     if not os.path.exists(path):
         return None, None
     try:
         with open(path) as f:
             payload = json.load(f)
+        # Reject old schema cache files
+        if payload.get("schema_version", 0) < CACHE_SCHEMA_VERSION:
+            logger.info(f"Stale cache schema for {watchlist_name}/{timeframe} — ignoring.")
+            os.remove(path)
+            return None, None
         df = pd.DataFrame(payload["data"])
+        # Double-check required columns actually present
+        if not REQUIRED_COLS.issubset(set(df.columns)):
+            logger.info(f"Cache missing required columns — ignoring.")
+            os.remove(path)
+            return None, None
         saved_at = payload.get("saved_at", "")
         return df, saved_at
     except Exception as e:
