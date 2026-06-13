@@ -1,0 +1,16 @@
+[Unit]
+Description=Indian Market Dashboard (Streamlit)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/p_projects
+ExecStart=/bin/bash /root/p_projects/run.sh
+Restart=always
+RestartSec=5
+StandardOutput=append:/root/p_projects/dashboard.log
+StandardError=append:/root/p_projects/dashboard.log
+
+[Install]
+WantedBy=multi-user.target

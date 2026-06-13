@@ -1,0 +1,33 @@
+name: Market Alert Notifications
+
+on:
+  schedule:
+    # Runs every 30 min on weekdays during Indian market hours (3:45 UTC = 9:15 IST, 10:00 UTC = 15:30 IST)
+    - cron: "*/30 3-10 * * 1-5"
+  workflow_dispatch:   # allows manual trigger from GitHub Actions UI
+
+jobs:
+  check-alerts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run alert check
+        env:
+          WHATSAPP_ENABLED: ${{ secrets.WHATSAPP_ENABLED }}
+          WHATSAPP_PHONE: ${{ secrets.WHATSAPP_PHONE }}
+          WHATSAPP_API_KEY: ${{ secrets.WHATSAPP_API_KEY }}
+          NOTIFY_WATCHLIST: ${{ secrets.NOTIFY_WATCHLIST }}
+        run: python notifications/check_alerts.py

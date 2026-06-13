@@ -1,0 +1,15 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# Secrets — never commit
+.streamlit/secrets.toml
+
+# Local cache files (regenerated automatically)
+data/nifty_cache.json
+dashboard.log
+
+# OS
+.DS_Store
