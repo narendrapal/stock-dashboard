@@ -3,15 +3,20 @@ Screener engine: fetches data, computes indicators, applies filters.
 """
 
 import logging
-from typing import Optional
 
 import pandas as pd
 
-from data.fetcher import fetch_ohlcv, fetch_quote, clear_cache
+from data.fetcher import fetch_ohlcv, fetch_quote
 from analysis.indicators import compute_all, compute_rsi
 from config import TIMEFRAMES, CACHE_TTL_SECONDS
 
 logger = logging.getLogger(__name__)
+
+
+def _get_rsi(symbol: str, timeframe: str, period: int, ttl: int) -> float | None:
+    tf = TIMEFRAMES.get(timeframe, TIMEFRAMES["Daily"])
+    df = fetch_ohlcv(symbol, period=tf["period"], interval=tf["interval"], ttl=ttl)
+    return compute_rsi(df, period=period) if df is not None else None
 
 
 def screen_symbol(
@@ -19,31 +24,56 @@ def screen_symbol(
     timeframe: str = "Daily",
     rsi_period: int = 14,
     ttl: int = CACHE_TTL_SECONDS,
+    stock_info: dict = None,
 ) -> dict:
     """
-    Full analysis for one symbol on a given timeframe.
-    Returns a flat dict of quote + indicators.
+    Full analysis for one symbol. Includes multi-TF RSI, MA flags, 52W high proximity.
+    stock_info: optional pre-fetched {name, sector, week52_high} dict.
     """
     tf = TIMEFRAMES.get(timeframe, TIMEFRAMES["Daily"])
     df = fetch_ohlcv(symbol, period=tf["period"], interval=tf["interval"], ttl=ttl)
     quote = fetch_quote(symbol, ttl=ttl)
 
+    info = stock_info or {}
+    last_price = quote.get("last_price")
+    week52_high = info.get("week52_high")
+    near_52w_high = (
+        last_price is not None and week52_high and week52_high > 0
+        and last_price >= week52_high * 0.97
+    )
+
     row = {
         "Symbol": symbol,
-        "Price": quote.get("last_price"),
+        "Name": info.get("name", symbol.replace(".NS", "").replace(".BO", "")),
+        "Sector": info.get("sector", "—"),
+        "Price": last_price,
         "Change%": quote.get("price_change_pct"),
         "Volume": quote.get("volume"),
-        "Day High": quote.get("day_high"),
-        "Day Low": quote.get("day_low"),
+        "52W High": week52_high,
+        "Near 52W High": near_52w_high,
         "price_change_pct": quote.get("price_change_pct"),
+        "RSI_W": None,
+        "RSI_M": None,
     }
 
     if df is not None and not df.empty:
         indicators = compute_all(df, rsi_period=rsi_period)
         row.update(indicators)
+        # Multi-timeframe RSI (weekly + monthly always fetched)
+        if timeframe != "Weekly":
+            row["RSI_W"] = _get_rsi(symbol, "Weekly", rsi_period, ttl)
+        else:
+            row["RSI_W"] = row.get("RSI")
+        if timeframe != "Monthly":
+            row["RSI_M"] = _get_rsi(symbol, "Monthly", rsi_period, ttl)
+        else:
+            row["RSI_M"] = row.get("RSI")
+        # Rename daily RSI for clarity when multi-TF shown
+        row["RSI_D"] = row.get("RSI")
     else:
-        row.update({"RSI": None, "SMA_20": None, "SMA_50": None,
-                    "EMA_20": None, "volume_ratio": None, "ATR": None})
+        row.update({"RSI": None, "RSI_D": None, "SMA_20": None, "SMA_50": None,
+                    "SMA_200": None, "EMA_20": None, "volume_ratio": None, "ATR": None,
+                    "above_sma20": False, "above_sma50": False, "above_sma200": False})
 
     return row
 

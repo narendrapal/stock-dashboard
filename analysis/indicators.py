@@ -91,11 +91,24 @@ def compute_atr(df: pd.DataFrame, period: int = 14) -> Optional[float]:
 
 def compute_all(df: pd.DataFrame, rsi_period: int = 14) -> dict:
     """Compute all indicators for a given OHLCV dataframe."""
+    last_close = round(float(df["Close"].iloc[-1]), 2) if df is not None and not df.empty else None
+    sma20  = compute_sma(df, 20)
+    sma50  = compute_sma(df, 50)
+    sma200 = compute_sma(df, 200)
+
+    above_sma20  = (last_close is not None and sma20  is not None and last_close > sma20)
+    above_sma50  = (last_close is not None and sma50  is not None and last_close > sma50)
+    above_sma200 = (last_close is not None and sma200 is not None and last_close > sma200)
+
     return {
         "RSI": compute_rsi(df, rsi_period),
-        "SMA_20": compute_sma(df, 20),
-        "SMA_50": compute_sma(df, 50),
+        "SMA_20": sma20,
+        "SMA_50": sma50,
+        "SMA_200": sma200,
         "EMA_20": compute_ema(df, 20),
+        "above_sma20": above_sma20,
+        "above_sma50": above_sma50,
+        "above_sma200": above_sma200,
         "volume_ratio": compute_volume_ratio(df),
         "ATR": compute_atr(df),
         **compute_macd(df),
