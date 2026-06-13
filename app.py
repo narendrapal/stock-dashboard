@@ -453,8 +453,82 @@ with tab2:
 # ─────────────────────────────────────────────────────────────────────────────
 with tab3:
     st.markdown('<p class="page-title">⭐ Watchlist Manager</p>', unsafe_allow_html=True)
-    custom_wl = load_custom_watchlists()
 
+    # ── Screener.in import ──────────────────────────────────────────────────
+    with st.expander("📥 Import Watchlists from Screener.in", expanded=False):
+        st.markdown("""
+Connect your **[Screener.in](https://www.screener.in)** account to import your
+watchlists directly. Credentials are used only for this session and **never stored to disk**.
+
+To avoid entering credentials every time, add them to Streamlit secrets:
+```toml
+[screener]
+username = "your@email.com"
+password = "yourpassword"
+```
+""")
+        try:
+            _si_u = st.secrets["screener"]["username"]
+            _si_p = st.secrets["screener"]["password"]
+            st.markdown('<div class="cache-banner">✅ Credentials loaded from Streamlit secrets</div>',
+                        unsafe_allow_html=True)
+        except Exception:
+            _si_u, _si_p = "", ""
+
+        sc1, sc2 = st.columns(2)
+        with sc1:
+            si_user = st.text_input("Screener.in Email / Username",
+                                    value=_si_u, key="si_user")
+        with sc2:
+            si_pass = st.text_input("Password", type="password",
+                                    value=_si_p, key="si_pass")
+
+        if st.button("🔗 Connect & Fetch Watchlists", key="si_connect"):
+            if not si_user or not si_pass:
+                st.error("Enter username and password.")
+            else:
+                from data.screener_in import login as si_login, fetch_watchlists as si_fetch_wl
+                with st.spinner("Logging in to Screener.in…"):
+                    _session = si_login(si_user, si_pass)
+                if not _session:
+                    st.error("❌ Login failed. Check your credentials.")
+                else:
+                    with st.spinner("Fetching your watchlists…"):
+                        _imported = si_fetch_wl(_session)
+                    if _imported:
+                        st.session_state["si_imported_wl"] = _imported
+                        st.success(f"✅ Found {len(_imported)} watchlist(s)!")
+                    else:
+                        st.warning("No watchlists found or none contain stocks.")
+
+        if st.session_state.get("si_imported_wl"):
+            _imp = st.session_state["si_imported_wl"]
+            st.subheader("Select watchlists to import:")
+            to_import = []
+            for _wl_name, _syms in _imp.items():
+                if st.checkbox(f"**{_wl_name}** — {len(_syms)} stocks",
+                               key=f"si_chk_{_wl_name}"):
+                    to_import.append(_wl_name)
+                    with st.expander(f"Preview: {_wl_name}"):
+                        st.write(", ".join(_syms[:20]) +
+                                 (f" … +{len(_syms)-20} more" if len(_syms) > 20 else ""))
+
+            if to_import and st.button("⬇️ Import Selected Watchlists",
+                                       type="primary", key="si_do_import"):
+                for _wl_name in to_import:
+                    _existing = load_custom_watchlists()
+                    if _wl_name not in _existing:
+                        create_watchlist(_wl_name)
+                    for _sym in _imp[_wl_name]:
+                        add_symbol_to_watchlist(_wl_name, _sym)
+                get_symbols.clear()
+                del st.session_state["si_imported_wl"]
+                st.success(f"✅ Imported {len(to_import)} watchlist(s)! "
+                           "Select them from the sidebar.")
+                st.rerun()
+
+    st.divider()
+    custom_wl = load_custom_watchlists()
     wl_col, detail_col = st.columns([1, 2])
 
     with wl_col:
@@ -605,6 +679,33 @@ api_key = "YOURCALLMEBOTKEY"
 notify_watchlist = "Nifty 50"
 ```
 """)
+
+    st.divider()
+    st.subheader("🏷 Sector Data (Screener.in)")
+    from data.screener_in import get_cache_stats, get_bulk_screener_info
+    si_stats = get_cache_stats()
+    st.markdown(
+        f'<div class="cache-banner">'
+        f'Cached: **{si_stats["total_cached"]}** stocks · '
+        f'Stale: {si_stats["stale_count"]} · '
+        f'Size: {si_stats["size_kb"]} KB</div>',
+        unsafe_allow_html=True)
+    st.caption("Sector data is scraped from Screener.in public pages and cached for 30 days. "
+               "Run this once after a fresh Screener data refresh.")
+
+    if symbols and st.button("📡 Fetch Sector Data for Current Index",
+                              key="fetch_sector", type="primary"):
+        pb = st.progress(0, text=f"Fetching sector data for {len(symbols)} stocks…")
+
+        def _prog(done, total):
+            pb.progress(done / total,
+                        text=f"Fetching sector… {done}/{total}")
+
+        with st.spinner("Scraping screener.in — this runs once and is cached 30 days…"):
+            get_bulk_screener_info(symbols, on_progress=_prog)
+        pb.empty()
+        st.success(f"✅ Sector data fetched for {len(symbols)} stocks! "
+                   "Click **Refresh** on the Screener tab to reload with sector info.")
 
     st.divider()
     st.subheader("🗂 NSE Index Cache")

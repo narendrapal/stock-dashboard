@@ -89,8 +89,9 @@ def fetch_index_symbols(index_name: str, force_refresh: bool = False) -> list[st
         if sym_col is None:
             raise ValueError(f"No Symbol column in {index_name} CSV. Columns: {list(df.columns)}")
 
-        symbols = [s.strip() + ".NS" for s in df[sym_col].dropna().tolist() if str(s).strip()]
-        logger.info(f"Fetched {len(symbols)} symbols for {index_name} from NSE")
+        raw = [s.strip() + ".NS" for s in df[sym_col].dropna().tolist() if str(s).strip()]
+        symbols = list(dict.fromkeys(raw))  # deduplicate, preserve order
+        logger.info(f"Fetched {len(symbols)} symbols for {index_name} from NSE (raw={len(raw)})")
 
         cache[index_name] = {
             "symbols": symbols,
